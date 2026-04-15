@@ -805,24 +805,10 @@ class SignalVisualizer:
             # Update spectrum plot
             self.line_spectrum.set_data(actual_freqs, spectrum_db)
             
-            # Only update axis limits if they haven't been set yet or if data range changes significantly
-            if not hasattr(self, 'spectrum_xlim') or not self.spectrum_xlim:
-                self.spectrum_xlim = [min(actual_freqs), max(actual_freqs)]
-                self.spectrum_ylim = [np.min(spectrum_db) - 5, np.max(spectrum_db) + 5]
-            else:
-                # Only adjust if new data range is significantly different
-                new_min_x = min(actual_freqs)
-                new_max_x = max(actual_freqs)
-                new_min_y = np.min(spectrum_db) - 5
-                new_max_y = np.max(spectrum_db) + 5
-                
-                # Only update if the change is more than 10%
-                if (abs(new_min_x - self.spectrum_xlim[0]) > 0.1 * abs(self.spectrum_xlim[1] - self.spectrum_xlim[0]) or
-                    abs(new_max_x - self.spectrum_xlim[1]) > 0.1 * abs(self.spectrum_xlim[1] - self.spectrum_xlim[0]) or
-                    abs(new_min_y - self.spectrum_ylim[0]) > 0.1 * abs(self.spectrum_ylim[1] - self.spectrum_ylim[0]) or
-                    abs(new_max_y - self.spectrum_ylim[1]) > 0.1 * abs(self.spectrum_ylim[1] - self.spectrum_ylim[0])):
-                    self.spectrum_xlim = [new_min_x, new_max_x]
-                    self.spectrum_ylim = [new_min_y, new_max_y]
+            # Update axis limits based on current frequency
+            bandwidth = self.sample_rate / 1e6  # MHz
+            self.spectrum_xlim = [center_freq - bandwidth/2, center_freq + bandwidth/2]
+            self.spectrum_ylim = [np.min(spectrum_db) - 5, np.max(spectrum_db) + 5]
             
             # Set axis limits
             self.ax_spectrum.set_xlim(self.spectrum_xlim)
