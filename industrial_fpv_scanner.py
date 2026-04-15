@@ -804,8 +804,29 @@ class SignalVisualizer:
             
             # Update spectrum plot
             self.line_spectrum.set_data(actual_freqs, spectrum_db)
-            self.ax_spectrum.set_xlim(min(actual_freqs), max(actual_freqs))
-            self.ax_spectrum.set_ylim(np.min(spectrum_db) - 5, np.max(spectrum_db) + 5)
+            
+            # Only update axis limits if they haven't been set yet or if data range changes significantly
+            if not hasattr(self, 'spectrum_xlim') or not self.spectrum_xlim:
+                self.spectrum_xlim = [min(actual_freqs), max(actual_freqs)]
+                self.spectrum_ylim = [np.min(spectrum_db) - 5, np.max(spectrum_db) + 5]
+            else:
+                # Only adjust if new data range is significantly different
+                new_min_x = min(actual_freqs)
+                new_max_x = max(actual_freqs)
+                new_min_y = np.min(spectrum_db) - 5
+                new_max_y = np.max(spectrum_db) + 5
+                
+                # Only update if the change is more than 10%
+                if (abs(new_min_x - self.spectrum_xlim[0]) > 0.1 * abs(self.spectrum_xlim[1] - self.spectrum_xlim[0]) or
+                    abs(new_max_x - self.spectrum_xlim[1]) > 0.1 * abs(self.spectrum_xlim[1] - self.spectrum_xlim[0]) or
+                    abs(new_min_y - self.spectrum_ylim[0]) > 0.1 * abs(self.spectrum_ylim[1] - self.spectrum_ylim[0]) or
+                    abs(new_max_y - self.spectrum_ylim[1]) > 0.1 * abs(self.spectrum_ylim[1] - self.spectrum_ylim[0])):
+                    self.spectrum_xlim = [new_min_x, new_max_x]
+                    self.spectrum_ylim = [new_min_y, new_max_y]
+            
+            # Set axis limits
+            self.ax_spectrum.set_xlim(self.spectrum_xlim)
+            self.ax_spectrum.set_ylim(self.spectrum_ylim)
             
             # Update title with current frequency
             self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
@@ -831,8 +852,15 @@ class SignalVisualizer:
             
             # Update time plot
             self.line_time.set_data(t, time_signal)
-            self.ax_time.set_xlim(0, max(t))
-            self.ax_time.set_ylim(np.min(time_signal) - 0.1, np.max(time_signal) + 0.1)
+            
+            # Only update axis limits if they haven't been set yet
+            if not hasattr(self, 'time_xlim') or not self.time_xlim:
+                self.time_xlim = [0, max(t)]
+                self.time_ylim = [-1.5, 1.5]  # Fixed range for better stability
+            
+            # Set axis limits
+            self.ax_time.set_xlim(self.time_xlim)
+            self.ax_time.set_ylim(self.time_ylim)
             
             return [self.line_time]
         except Exception as e:
@@ -855,7 +883,7 @@ class SignalVisualizer:
             self.progress_data[band_name].append((current_freq / 1e6, signal_strength))
             
             # Limit data points to avoid overcrowding
-            max_points = 1000
+            max_points = 500  # Reduce points to improve performance
             if len(self.progress_data[band_name]) > max_points:
                 self.progress_data[band_name] = self.progress_data[band_name][-max_points:]
             
@@ -869,11 +897,17 @@ class SignalVisualizer:
                     all_freqs.extend(freqs)
                     all_strengths.extend(strengths)
             
-            # Update axis limits
-            if all_freqs:
-                self.ax_progress.set_xlim(min(all_freqs) - 1, max(all_freqs) + 1)
-            if all_strengths:
-                self.ax_progress.set_ylim(min(all_strengths) - 5, max(all_strengths) + 5)
+            # Only update axis limits if they haven't been set yet
+            if all_freqs and (not hasattr(self, 'progress_xlim') or not self.progress_xlim):
+                self.progress_xlim = [min(all_freqs) - 5, max(all_freqs) + 5]
+            if all_strengths and (not hasattr(self, 'progress_ylim') or not self.progress_ylim):
+                self.progress_ylim = [min(all_strengths) - 10, max(all_strengths) + 10]
+            
+            # Set axis limits
+            if hasattr(self, 'progress_xlim') and self.progress_xlim:
+                self.ax_progress.set_xlim(self.progress_xlim)
+            if hasattr(self, 'progress_ylim') and self.progress_ylim:
+                self.ax_progress.set_ylim(self.progress_ylim)
             
             return list(self.band_lines.values())
         except Exception as e:
