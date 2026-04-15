@@ -817,6 +817,14 @@ class SignalVisualizer:
             # Update title with current frequency
             self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
             
+            # Set axis labels
+            self.ax_spectrum.set_xlabel('Frequency (MHz)')
+            self.ax_spectrum.set_ylabel('Signal Strength (dB)')
+            
+            # Auto adjust tick labels
+            self.ax_spectrum.tick_params(axis='x', rotation=45)
+            self.fig.canvas.draw_idle()
+            
             return [self.line_spectrum]
         except Exception as e:
             logger.error(f"Failed to update spectrum plot: {e}")
@@ -839,14 +847,21 @@ class SignalVisualizer:
             # Update time plot
             self.line_time.set_data(t, time_signal)
             
-            # Only update axis limits if they haven't been set yet
-            if not hasattr(self, 'time_xlim') or not self.time_xlim:
-                self.time_xlim = [0, max(t)]
-                self.time_ylim = [-1.5, 1.5]  # Fixed range for better stability
+            # Set axis limits
+            self.time_xlim = [0, max(t)]
+            self.time_ylim = [-1.5, 1.5]  # Fixed range for better stability
             
             # Set axis limits
             self.ax_time.set_xlim(self.time_xlim)
             self.ax_time.set_ylim(self.time_ylim)
+            
+            # Set axis labels
+            self.ax_time.set_xlabel('Time (ms)')
+            self.ax_time.set_ylabel('Amplitude')
+            
+            # Auto adjust tick labels
+            self.ax_time.tick_params(axis='x', rotation=45)
+            self.fig.canvas.draw_idle()
             
             return [self.line_time]
         except Exception as e:
@@ -917,6 +932,14 @@ class SignalVisualizer:
             min_freq = min(all_starts) - 10
             max_freq = max(all_ends) + 10
             self.ax_count.set_xlim(min_freq, max_freq)
+            
+            # Set axis labels
+            self.ax_count.set_xlabel('Frequency (MHz)')
+            self.ax_count.set_ylabel('Band')
+            
+            # Auto adjust tick labels
+            self.ax_count.tick_params(axis='x', rotation=45)
+            self.fig.canvas.draw_idle()
             
             # Add legend
             self.ax_count.legend(loc='upper right')
