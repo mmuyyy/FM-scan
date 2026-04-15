@@ -880,53 +880,60 @@ class SignalVisualizer:
             
             # Update count plot
             self.ax_count.clear()
-            self.ax_count.set_title('Detected FM Signals')
-            self.ax_count.set_xlabel('Band')
-            self.ax_count.set_ylabel('Frequency (MHz)')
+            self.ax_count.set_title('FM Signal Bands')
+            self.ax_count.set_xlabel('Frequency (MHz)')
+            self.ax_count.set_ylabel('Band')
             self.ax_count.grid(True)
             
-            # Prepare data for plotting
-            all_bands = list(self.signal_counts.keys())
+            # Define band ranges for reference
+            band_ranges = {
+                'FM Broadcast': (87.5, 108),
+                '5.8G FPV': (5725, 5925),
+                '2.4G ISM': (2400, 2483.5)
+            }
             
-            if all_bands:
-                # Create a table-like display
-                max_signals = max(len(self.signal_counts[band]) for band in all_bands)
-                
-                # Create y positions for each signal
-                y_positions = []
-                freq_values = []
-                band_names = []
-                colors = []
-                
-                # Color mapping for bands
-                band_colors = {'FM Broadcast': 'blue', '5.8G FPV': 'red', '2.4G ISM': 'green'}
-                
-                # Organize data
-                for band in all_bands:
-                    frequencies = self.signal_counts[band]
-                    band_color = band_colors.get(band, 'gray')
-                    
-                    for i, freq in enumerate(frequencies):
-                        y_positions.append(i)
-                        freq_values.append(freq / 1e6)  # Convert to MHz
-                        band_names.append(band)
-                        colors.append(band_color)
-                
-                if freq_values:
-                    # Create horizontal bar plot for better readability
-                    bars = self.ax_count.barh(band_names, freq_values, color=colors, height=0.6, alpha=0.7)
-                    
-                    # Add frequency labels to bars
-                    for bar, freq in zip(bars, freq_values):
-                        width = bar.get_width()
-                        self.ax_count.text(width + 5, bar.get_y() + bar.get_height()/2,
-                                        f'{freq:.2f}', ha='left', va='center', fontsize=8)
-                    
-                    # Set x-axis limits with padding
-                    max_freq = max(freq_values) + 10
-                    self.ax_count.set_xlim(0, max_freq)
-                    
-                    return bars
+            # Color mapping for bands
+            band_colors = {'FM Broadcast': 'blue', '5.8G FPV': 'red', '2.4G ISM': 'green'}
+            
+            # Create y positions for each band
+            bands = list(band_ranges.keys())
+            y_positions = np.arange(len(bands))
+            
+            # Plot band ranges as horizontal bars
+            bar_height = 0.6
+            for i, band in enumerate(bands):
+                start, end = band_ranges[band]
+                color = band_colors.get(band, 'gray')
+                # Draw band range
+                self.ax_count.barh(y_positions[i], end - start, left=start, 
+                                color=color, alpha=0.3, label=band)
+            
+            # Plot detected FM signals as points
+            for band in self.signal_counts:
+                if band in band_ranges:
+                    band_index = bands.index(band)
+                    color = band_colors.get(band, 'gray')
+                    for freq in self.signal_counts[band]:
+                        freq_mhz = freq / 1e6
+                        # Plot signal point
+                        self.ax_count.scatter(freq_mhz, band_index, color=color, s=50, alpha=0.8)
+                        # Add frequency label
+                        self.ax_count.text(freq_mhz + 5, band_index, f'{freq_mhz:.2f}', 
+                                        ha='left', va='center', fontsize=8, color=color)
+            
+            # Set y-axis ticks and labels
+            self.ax_count.set_yticks(y_positions)
+            self.ax_count.set_yticklabels(bands)
+            
+            # Set x-axis limits based on all bands
+            all_starts = [start for start, end in band_ranges.values()]
+            all_ends = [end for start, end in band_ranges.values()]
+            min_freq = min(all_starts) - 10
+            max_freq = max(all_ends) + 10
+            self.ax_count.set_xlim(min_freq, max_freq)
+            
+            # Add legend
+            self.ax_count.legend(loc='upper right')
             
             return []
         except Exception as e:
@@ -1218,7 +1225,7 @@ class IndustrialFPVScanner:
             artists = []
             data_processed = False
             
-            # Only process one data item per frame to avoid overwhelming the UI
+            # Only process data if we have enough samples
             if not self.data_queue.empty():
                 try:
                     # Get data with is_fm parameter
@@ -1231,10 +1238,39 @@ class IndustrialFPVScanner:
                     
                     if len(samples) > 0:
                         # Only update if we have valid samples
+                        # Store last valid data for reference
+                        self.last_valid_samples = samples
+                        self.last_valid_freq = current_freq
+                        self.last_valid_band = band_name
+                        self.last_valid_strength = signal_strength
+                        self.last_valid_is_fm = is_fm
+                        
                         artists.extend(self.visualizer.update(samples, current_freq, band_name, signal_strength, is_fm))
                         data_processed = True
+                    else:
+                        # Use last valid data if current data is empty
+                        if hasattr(self, 'last_valid_samples') and len(self.last_valid_samples) > 0:
+                            artists.extend(self.visualizer.update(
+                                self.last_valid_samples, 
+                                self.last_valid_freq, 
+                                self.last_valid_band, 
+                                self.last_valid_strength, 
+                                self.last_valid_is_fm
+                            ))
+                            data_processed = True
                 except queue.Empty:
                     pass
+            else:
+                # Use last valid data if queue is empty
+                if hasattr(self, 'last_valid_samples') and len(self.last_valid_samples) > 0:
+                    artists.extend(self.visualizer.update(
+                        self.last_valid_samples, 
+                        self.last_valid_freq, 
+                        self.last_valid_band, 
+                        self.last_valid_strength, 
+                        self.last_valid_is_fm
+                    ))
+                    data_processed = True
             
             # Only return artists if data was processed to avoid blank updates
             if data_processed:
