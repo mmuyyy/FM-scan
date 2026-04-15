@@ -887,35 +887,46 @@ class SignalVisualizer:
             
             # Prepare data for plotting
             all_bands = list(self.signal_counts.keys())
-            all_frequencies = []
-            band_labels = []
             
-            for band in all_bands:
-                frequencies = self.signal_counts[band]
-                if frequencies:
-                    for freq in frequencies:
-                        all_frequencies.append(freq / 1e6)  # Convert to MHz
-                        band_labels.append(band)
-            
-            # Create scatter plot
-            if all_frequencies:
-                # Use different colors for different bands
-                colors = {'FM Broadcast': 'blue', '5.8G FPV': 'red', '2.4G ISM': 'green'}
-                point_colors = [colors.get(band, 'gray') for band in band_labels]
+            if all_bands:
+                # Create a table-like display
+                max_signals = max(len(self.signal_counts[band]) for band in all_bands)
                 
-                # Create scatter plot
-                scatter = self.ax_count.scatter(band_labels, all_frequencies, c=point_colors, s=50, alpha=0.7)
+                # Create y positions for each signal
+                y_positions = []
+                freq_values = []
+                band_names = []
+                colors = []
                 
-                # Add frequency labels to points
-                for band, freq in zip(band_labels, all_frequencies):
-                    self.ax_count.text(band, freq + 5, f'{freq:.2f}', ha='center', va='bottom', fontsize=8)
+                # Color mapping for bands
+                band_colors = {'FM Broadcast': 'blue', '5.8G FPV': 'red', '2.4G ISM': 'green'}
                 
-                # Set y-axis limits with padding
-                min_freq = min(all_frequencies) - 10
-                max_freq = max(all_frequencies) + 10
-                self.ax_count.set_ylim(min_freq, max_freq)
+                # Organize data
+                for band in all_bands:
+                    frequencies = self.signal_counts[band]
+                    band_color = band_colors.get(band, 'gray')
+                    
+                    for i, freq in enumerate(frequencies):
+                        y_positions.append(i)
+                        freq_values.append(freq / 1e6)  # Convert to MHz
+                        band_names.append(band)
+                        colors.append(band_color)
                 
-                return [scatter]
+                if freq_values:
+                    # Create horizontal bar plot for better readability
+                    bars = self.ax_count.barh(band_names, freq_values, color=colors, height=0.6, alpha=0.7)
+                    
+                    # Add frequency labels to bars
+                    for bar, freq in zip(bars, freq_values):
+                        width = bar.get_width()
+                        self.ax_count.text(width + 5, bar.get_y() + bar.get_height()/2,
+                                        f'{freq:.2f}', ha='left', va='center', fontsize=8)
+                    
+                    # Set x-axis limits with padding
+                    max_freq = max(freq_values) + 10
+                    self.ax_count.set_xlim(0, max_freq)
+                    
+                    return bars
             
             return []
         except Exception as e:
@@ -925,6 +936,10 @@ class SignalVisualizer:
     def update(self, samples, current_freq, band_name, signal_strength, is_fm=False):
         """Update all plots"""
         try:
+            # Only update if we have valid samples
+            if len(samples) == 0:
+                return []
+            
             spectrum_artists = self.update_spectrum(samples, current_freq)
             time_artists = self.update_time(samples)
             count_artists = self.update_count(band_name, is_fm, current_freq)
@@ -1203,7 +1218,8 @@ class IndustrialFPVScanner:
             artists = []
             data_processed = False
             
-            while not self.data_queue.empty():
+            # Only process one data item per frame to avoid overwhelming the UI
+            if not self.data_queue.empty():
                 try:
                     # Get data with is_fm parameter
                     try:
@@ -1214,10 +1230,11 @@ class IndustrialFPVScanner:
                         is_fm = False
                     
                     if len(samples) > 0:
+                        # Only update if we have valid samples
                         artists.extend(self.visualizer.update(samples, current_freq, band_name, signal_strength, is_fm))
                         data_processed = True
                 except queue.Empty:
-                    break
+                    pass
             
             # Only return artists if data was processed to avoid blank updates
             if data_processed:
