@@ -784,6 +784,18 @@ class SignalVisualizer:
         # Current state
         self.current_band = None
         self.current_freq = 0
+        
+        # Axis limits (fixed to prevent flickering)
+        self.spectrum_xlim = None
+        self.spectrum_ylim = None
+        self.time_xlim = None
+        self.time_ylim = None
+        self.progress_xlim = None
+        self.progress_ylim = None
+        
+        # Update counter to control update frequency
+        self.update_counter = 0
+        self.update_interval = 3  # Update every 3 frames to reduce flickering
     
     def update_spectrum(self, samples, current_freq):
         """Update spectrum plot"""
@@ -804,11 +816,18 @@ class SignalVisualizer:
             
             # Update spectrum plot
             self.line_spectrum.set_data(actual_freqs, spectrum_db)
-            self.ax_spectrum.set_xlim(min(actual_freqs), max(actual_freqs))
-            self.ax_spectrum.set_ylim(np.min(spectrum_db) - 5, np.max(spectrum_db) + 5)
+            
+            # Set fixed axis limits to prevent flickering
+            if self.spectrum_xlim is None:
+                self.spectrum_xlim = [min(actual_freqs), max(actual_freqs)]
+                self.spectrum_ylim = [np.min(spectrum_db) - 10, np.max(spectrum_db) + 10]
+            
+            self.ax_spectrum.set_xlim(self.spectrum_xlim)
+            self.ax_spectrum.set_ylim(self.spectrum_ylim)
             
             # Update title with current frequency
-            self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
+            if self.update_counter % 5 == 0:  # Update title less frequently
+                self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
             
             return [self.line_spectrum]
         except Exception as e:
@@ -831,8 +850,14 @@ class SignalVisualizer:
             
             # Update time plot
             self.line_time.set_data(t, time_signal)
-            self.ax_time.set_xlim(0, max(t))
-            self.ax_time.set_ylim(np.min(time_signal) - 0.1, np.max(time_signal) + 0.1)
+            
+            # Set fixed axis limits to prevent flickering
+            if self.time_xlim is None:
+                self.time_xlim = [0, max(t)]
+                self.time_ylim = [-1.5, 1.5]  # Fixed range for better stability
+            
+            self.ax_time.set_xlim(self.time_xlim)
+            self.ax_time.set_ylim(self.time_ylim)
             
             return [self.line_time]
         except Exception as e:
@@ -855,7 +880,7 @@ class SignalVisualizer:
             self.progress_data[band_name].append((current_freq / 1e6, signal_strength))
             
             # Limit data points to avoid overcrowding
-            max_points = 1000
+            max_points = 500  # Reduce points to improve performance
             if len(self.progress_data[band_name]) > max_points:
                 self.progress_data[band_name] = self.progress_data[band_name][-max_points:]
             
@@ -869,11 +894,16 @@ class SignalVisualizer:
                     all_freqs.extend(freqs)
                     all_strengths.extend(strengths)
             
-            # Update axis limits
-            if all_freqs:
-                self.ax_progress.set_xlim(min(all_freqs) - 1, max(all_freqs) + 1)
-            if all_strengths:
-                self.ax_progress.set_ylim(min(all_strengths) - 5, max(all_strengths) + 5)
+            # Set fixed axis limits to prevent flickering
+            if all_freqs and self.progress_xlim is None:
+                self.progress_xlim = [min(all_freqs) - 5, max(all_freqs) + 5]
+            if all_strengths and self.progress_ylim is None:
+                self.progress_ylim = [min(all_strengths) - 10, max(all_strengths) + 10]
+            
+            if self.progress_xlim:
+                self.ax_progress.set_xlim(self.progress_xlim)
+            if self.progress_ylim:
+                self.ax_progress.set_ylim(self.progress_ylim)
             
             return list(self.band_lines.values())
         except Exception as e:
@@ -883,6 +913,11 @@ class SignalVisualizer:
     def update(self, samples, current_freq, band_name, signal_strength):
         """Update all plots"""
         try:
+            # Control update frequency to reduce flickering
+            self.update_counter += 1
+            if self.update_counter % self.update_interval != 0:
+                return []
+            
             spectrum_artists = self.update_spectrum(samples, current_freq)
             time_artists = self.update_time(samples)
             progress_artists = self.update_progress(band_name, current_freq, signal_strength)
