@@ -762,24 +762,24 @@ class SignalVisualizer:
         self.ax_time.set_ylabel('Amplitude')
         self.ax_time.grid(True)
         
-        # Scan progress plot
-        self.ax_progress = self.fig.add_subplot(2, 2, 4)
-        self.ax_progress.set_title('Scan Progress')
-        self.ax_progress.set_xlabel('Frequency (MHz)')
-        self.ax_progress.set_ylabel('Signal Strength (dB)')
-        self.ax_progress.grid(True)
+        # FM signal count display
+        self.ax_count = self.fig.add_subplot(2, 2, 4)
+        self.ax_count.set_title('FM Signal Count')
+        self.ax_count.set_xlabel('Band')
+        self.ax_count.set_ylabel('Count')
+        self.ax_count.grid(True)
         
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         
         # Initialize data storage
         self.spectrum_data = []
         self.time_data = []
-        self.progress_data = {}
+        self.signal_counts = {}
         
         # Initialize plot elements
         self.line_spectrum, = self.ax_spectrum.plot([], [], 'b-')
         self.line_time, = self.ax_time.plot([], [], 'g-')
-        self.band_lines = {}
+        self.count_bars = None
         
         # Current state
         self.current_band = None
@@ -867,61 +867,69 @@ class SignalVisualizer:
             logger.error(f"Failed to update time plot: {e}")
             return []
     
-    def update_progress(self, band_name, current_freq, signal_strength):
-        """Update scan progress plot"""
+    def update_count(self, band_name, is_fm, frequency=None):
+        """Update FM signal display"""
         try:
-            # Initialize band data if not exists
-            if band_name not in self.progress_data:
-                self.progress_data[band_name] = []
-                # Create line for this band
-                line, = self.ax_progress.plot([], [], '-', label=band_name)
-                self.band_lines[band_name] = line
-                # Update legend
-                self.ax_progress.legend()
+            # Initialize band signals if not exists
+            if band_name not in self.signal_counts:
+                self.signal_counts[band_name] = []
             
-            # Add current data point
-            self.progress_data[band_name].append((current_freq / 1e6, signal_strength))
+            # Add frequency if it's an FM signal and not already in the list
+            if is_fm and frequency and frequency not in self.signal_counts[band_name]:
+                self.signal_counts[band_name].append(frequency)
             
-            # Limit data points to avoid overcrowding
-            max_points = 500  # Reduce points to improve performance
-            if len(self.progress_data[band_name]) > max_points:
-                self.progress_data[band_name] = self.progress_data[band_name][-max_points:]
+            # Update count plot
+            self.ax_count.clear()
+            self.ax_count.set_title('Detected FM Signals')
+            self.ax_count.set_xlabel('Band')
+            self.ax_count.set_ylabel('Frequency (MHz)')
+            self.ax_count.grid(True)
             
-            # Update progress plot for all bands
-            all_freqs = []
-            all_strengths = []
-            for band in self.progress_data:
-                if self.progress_data[band]:
-                    freqs, strengths = zip(*self.progress_data[band])
-                    self.band_lines[band].set_data(freqs, strengths)
-                    all_freqs.extend(freqs)
-                    all_strengths.extend(strengths)
+            # Prepare data for plotting
+            all_bands = list(self.signal_counts.keys())
+            all_frequencies = []
+            band_labels = []
             
-            # Only update axis limits if they haven't been set yet
-            if all_freqs and (not hasattr(self, 'progress_xlim') or not self.progress_xlim):
-                self.progress_xlim = [min(all_freqs) - 5, max(all_freqs) + 5]
-            if all_strengths and (not hasattr(self, 'progress_ylim') or not self.progress_ylim):
-                self.progress_ylim = [min(all_strengths) - 10, max(all_strengths) + 10]
+            for band in all_bands:
+                frequencies = self.signal_counts[band]
+                if frequencies:
+                    for freq in frequencies:
+                        all_frequencies.append(freq / 1e6)  # Convert to MHz
+                        band_labels.append(band)
             
-            # Set axis limits
-            if hasattr(self, 'progress_xlim') and self.progress_xlim:
-                self.ax_progress.set_xlim(self.progress_xlim)
-            if hasattr(self, 'progress_ylim') and self.progress_ylim:
-                self.ax_progress.set_ylim(self.progress_ylim)
+            # Create scatter plot
+            if all_frequencies:
+                # Use different colors for different bands
+                colors = {'FM Broadcast': 'blue', '5.8G FPV': 'red', '2.4G ISM': 'green'}
+                point_colors = [colors.get(band, 'gray') for band in band_labels]
+                
+                # Create scatter plot
+                scatter = self.ax_count.scatter(band_labels, all_frequencies, c=point_colors, s=50, alpha=0.7)
+                
+                # Add frequency labels to points
+                for band, freq in zip(band_labels, all_frequencies):
+                    self.ax_count.text(band, freq + 5, f'{freq:.2f}', ha='center', va='bottom', fontsize=8)
+                
+                # Set y-axis limits with padding
+                min_freq = min(all_frequencies) - 10
+                max_freq = max(all_frequencies) + 10
+                self.ax_count.set_ylim(min_freq, max_freq)
+                
+                return [scatter]
             
-            return list(self.band_lines.values())
+            return []
         except Exception as e:
-            logger.error(f"Failed to update progress plot: {e}")
+            logger.error(f"Failed to update signal display: {e}")
             return []
     
-    def update(self, samples, current_freq, band_name, signal_strength):
+    def update(self, samples, current_freq, band_name, signal_strength, is_fm=False):
         """Update all plots"""
         try:
             spectrum_artists = self.update_spectrum(samples, current_freq)
             time_artists = self.update_time(samples)
-            progress_artists = self.update_progress(band_name, current_freq, signal_strength)
+            count_artists = self.update_count(band_name, is_fm, current_freq)
             
-            return spectrum_artists + time_artists + progress_artists
+            return spectrum_artists + time_artists + count_artists
         except Exception as e:
             logger.error(f"Failed to update plots: {e}")
             return []
@@ -1106,7 +1114,7 @@ class IndustrialFPVScanner:
                     continue
                 
                 # Wait for frequency to stabilize
-                time.sleep(0.1)
+                time.sleep(0.3)  # Increased wait time for better stability
                 
                 # Receive samples
                 num_samples = self.config_manager.get('scan_params.num_samples', 8192)
@@ -1132,7 +1140,7 @@ class IndustrialFPVScanner:
                     self.system_monitor.update(signal_info)
                     
                     # Add to data queue for visualization
-                    self.data_queue.put((samples, current_freq, band['name'], signal_strength))
+                    self.data_queue.put((samples, current_freq, band['name'], signal_strength, signal_info['is_fm']))
                 
                 # Move to next frequency
                 current_freq += band['step']
@@ -1193,18 +1201,33 @@ class IndustrialFPVScanner:
         try:
             # Process data from queue
             artists = []
+            data_processed = False
+            
             while not self.data_queue.empty():
                 try:
-                    samples, current_freq, band_name, signal_strength = self.data_queue.get(block=False)
-                    artists.extend(self.visualizer.update(samples, current_freq, band_name, signal_strength))
+                    # Get data with is_fm parameter
+                    try:
+                        samples, current_freq, band_name, signal_strength, is_fm = self.data_queue.get(block=False)
+                    except ValueError:
+                        # Handle old queue entries without is_fm
+                        samples, current_freq, band_name, signal_strength = self.data_queue.get(block=False)
+                        is_fm = False
+                    
+                    if len(samples) > 0:
+                        artists.extend(self.visualizer.update(samples, current_freq, band_name, signal_strength, is_fm))
+                        data_processed = True
                 except queue.Empty:
                     break
             
-            # Log system status periodically
-            if frame % 100 == 0:
-                self.system_monitor.log_status()
-            
-            return artists
+            # Only return artists if data was processed to avoid blank updates
+            if data_processed:
+                # Log system status periodically
+                if frame % 100 == 0:
+                    self.system_monitor.log_status()
+                return artists
+            else:
+                # Return empty list to avoid blank updates
+                return []
         except Exception as e:
             logger.error(f"Error updating visualization: {e}")
             return []
