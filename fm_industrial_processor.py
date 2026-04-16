@@ -662,9 +662,14 @@ class SignalVisualizer:
         spectrum_db = 20 * np.log10(spectrum + 1e-10)
 
         # Calculate frequency axis
+        # Use fftshift to get correct frequency ordering
         freqs = np.fft.fftfreq(self.config['fft_size'], 1/self.sample_rate) / 1e6  # Convert to MHz
+        freqs = np.fft.fftshift(freqs)  # Shift frequencies to center at zero
         center_freq = current_freq / 1e6
         actual_freqs = freqs + center_freq
+        
+        # Also shift the spectrum to match the frequency axis
+        spectrum_db = np.fft.fftshift(spectrum_db)
 
         # Update spectrum data
         self.spectrum_data.append(spectrum_db)
