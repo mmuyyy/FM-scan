@@ -658,7 +658,7 @@ class SignalVisualizer:
     def update_spectrum(self, samples, current_freq):
         """Update spectrum plot"""
         # Calculate spectrum
-        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']]))
+        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']))
         spectrum_db = 20 * np.log10(spectrum + 1e-10)
         
         # Calculate frequency axis
@@ -679,7 +679,8 @@ class SignalVisualizer:
         # Update title
         self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
         
-        return [self.line_spectrum]
+        # Return both line and title to ensure title is updated with blit
+        return [self.line_spectrum, self.ax_spectrum.title]
     
     def update_time(self, samples):
         """Update time-domain plot"""
@@ -711,25 +712,35 @@ class SignalVisualizer:
         if len(self.progress_data[band_name]) > max_points:
             self.progress_data[band_name] = self.progress_data[band_name][-max_points:]
         
-        # Update progress plot for all bands
+        # Only show current band progress for better visualization
+        # Clear all lines first
         for band in self.bands:
-            if self.progress_data[band['name']]:
-                freqs, strengths = zip(*self.progress_data[band['name']])
-                self.band_lines[band['name']].set_data(freqs, strengths)
+            if self.band_lines.get(band['name']):
+                self.band_lines[band['name']].set_data([], [])
+        
+        # Update only current band
+        if self.progress_data[band_name]:
+            freqs, strengths = zip(*self.progress_data[band_name])
+            self.band_lines[band_name].set_data(freqs, strengths)
+            
+            # Update axis limits for current band only
+            if freqs:
+                # Get band information to set appropriate limits
+                current_band = None
+                for band in self.bands:
+                    if band['name'] == band_name:
+                        current_band = band
+                        break
                 
-                # Update axis limits
-                all_freqs = []
-                all_strengths = []
-                for b in self.bands:
-                    if self.progress_data[b['name']]:
-                        f, s = zip(*self.progress_data[b['name']])
-                        all_freqs.extend(f)
-                        all_strengths.extend(s)
-                
-                if all_freqs:
-                    self.ax_progress.set_xlim(min(all_freqs) - 1, max(all_freqs) + 1)
-                if all_strengths:
-                    self.ax_progress.set_ylim(min(all_strengths) - 5, max(all_strengths) + 5)
+                if current_band:
+                    # Set x-axis limits based on current band range
+                    self.ax_progress.set_xlim(current_band['start']/1e6 - 1, current_band['stop']/1e6 + 1)
+                else:
+                    # Fallback to data range
+                    self.ax_progress.set_xlim(min(freqs) - 1, max(freqs) + 1)
+            
+            if strengths:
+                self.ax_progress.set_ylim(min(strengths) - 5, max(strengths) + 5)
         
         return list(self.band_lines.values())
     
