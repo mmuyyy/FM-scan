@@ -658,7 +658,7 @@ class SignalVisualizer:
     def update_spectrum(self, samples, current_freq):
         """Update spectrum plot"""
         # Calculate spectrum
-        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']))       
+        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']]))       
         spectrum_db = 20 * np.log10(spectrum + 1e-10)
 
         # Calculate frequency axis
