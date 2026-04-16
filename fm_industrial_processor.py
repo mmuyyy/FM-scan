@@ -794,19 +794,25 @@ class SignalVisualizer:
             f"Current Frequency: {current_freq_mhz:.2f} MHz",
             f"Scan Cycle: {scan_count}",
             f"Detected Signals: {detected_count}",
-            f"Sample Rate: {self.sample_rate / 1e6:.1f} MHz"
+            f"Sample Rate: {self.sample_rate / 1e6:.1f} MHz",
+            "",
+            "Press 'n' to switch to next band",
+            "Press 'p' to switch to previous band"
         ]
         
         # Display band information
         for i, line in enumerate(info_text):
-            self.ax_info.text(0.1, 0.8 - i*0.12, line, fontsize=10)
+            self.ax_info.text(0.1, 0.85 - i*0.1, line, fontsize=10)
         
         # Display all bands with their ranges
-        band_info = "\nBands:\n"
-        for band in self.bands:
+        band_info = "\nAvailable Bands:\n"
+        for i, band in enumerate(self.bands):
             band_start = band['start'] / 1e6
             band_stop = band['stop'] / 1e6
-            band_info += f"- {band['name']}: {band_start:.1f} - {band_stop:.1f} MHz\n"
+            if band['name'] == current_band_name:
+                band_info += f"→ [{i+1}] {band['name']}: {band_start:.1f} - {band_stop:.1f} MHz (Current)\n"
+            else:
+                band_info += f"  [{i+1}] {band['name']}: {band_start:.1f} - {band_stop:.1f} MHz\n"
         
         self.ax_info.text(0.1, 0.1, band_info, fontsize=9, verticalalignment='top')
         
@@ -910,11 +916,27 @@ class FM_Industrial_Processor:
     def start_scan(self):
         """Start scanning"""
         print("Starting FM signal scan...")
+        print("Press 'n' to switch to next band")
+        print("Press 'p' to switch to previous band")
         
         # Define animation update function
         def update(frame):
             """Update animation"""
             return self.visualizer.update_scan(self.device, self.processor)
+        
+        # Define key press handler
+        def on_key_press(event):
+            """Handle key press events"""
+            if event.key == 'n':
+                # Switch to next band
+                self.visualizer.current_band_index = (self.visualizer.current_band_index + 1) % len(self.visualizer.bands)
+                self.visualizer.current_freq = self.visualizer.bands[self.visualizer.current_band_index]['start']
+                print(f"Switched to band: {self.visualizer.bands[self.visualizer.current_band_index]['name']}")
+            elif event.key == 'p':
+                # Switch to previous band
+                self.visualizer.current_band_index = (self.visualizer.current_band_index - 1) % len(self.visualizer.bands)
+                self.visualizer.current_freq = self.visualizer.bands[self.visualizer.current_band_index]['start']
+                print(f"Switched to band: {self.visualizer.bands[self.visualizer.current_band_index]['name']}")
         
         # Start animation
         ani = FuncAnimation(
@@ -923,6 +945,9 @@ class FM_Industrial_Processor:
             interval=self.config['visualization']['update_interval'],
             blit=True
         )
+        
+        # Connect key press event
+        self.visualizer.fig.canvas.mpl_connect('key_press_event', on_key_press)
         
         # Display figure
         try:
