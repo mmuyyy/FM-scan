@@ -658,27 +658,27 @@ class SignalVisualizer:
     def update_spectrum(self, samples, current_freq):
         """Update spectrum plot"""
         # Calculate spectrum
-        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']))
+        spectrum = np.abs(np.fft.fft(samples[:self.config['fft_size']))       
         spectrum_db = 20 * np.log10(spectrum + 1e-10)
-        
+
         # Calculate frequency axis
         freqs = np.fft.fftfreq(self.config['fft_size'], 1/self.sample_rate) / 1e6  # Convert to MHz
         center_freq = current_freq / 1e6
         actual_freqs = freqs + center_freq
-        
+
         # Update spectrum data
         self.spectrum_data.append(spectrum_db)
         if len(self.spectrum_data) > self.config['window_size']:
             self.spectrum_data.pop(0)
-        
+
         # Update spectrum plot
         self.line_spectrum.set_data(actual_freqs, spectrum_db)
         self.ax_spectrum.set_xlim(min(actual_freqs), max(actual_freqs))
         self.ax_spectrum.set_ylim(np.min(spectrum_db) - 5, np.max(spectrum_db) + 5)
-        
+
         # Update title
         self.ax_spectrum.set_title(f'Real-time Spectrum - Current: {center_freq:.2f} MHz')
-        
+
         # Return both line and title to ensure title is updated with blit
         return [self.line_spectrum, self.ax_spectrum.title]
     
@@ -706,23 +706,23 @@ class SignalVisualizer:
         """Update scan progress plot"""
         # Add current data point
         self.progress_data[band_name].append((current_freq / 1e6, signal_strength))
-        
+
         # Limit data points
         max_points = 1000
         if len(self.progress_data[band_name]) > max_points:
             self.progress_data[band_name] = self.progress_data[band_name][-max_points:]
-        
+
         # Only show current band progress for better visualization
         # Clear all lines first
         for band in self.bands:
             if self.band_lines.get(band['name']):
                 self.band_lines[band['name']].set_data([], [])
-        
+
         # Update only current band
         if self.progress_data[band_name]:
             freqs, strengths = zip(*self.progress_data[band_name])
             self.band_lines[band_name].set_data(freqs, strengths)
-            
+
             # Update axis limits for current band only
             if freqs:
                 # Get band information to set appropriate limits
@@ -731,17 +731,17 @@ class SignalVisualizer:
                     if band['name'] == band_name:
                         current_band = band
                         break
-                
+
                 if current_band:
                     # Set x-axis limits based on current band range
                     self.ax_progress.set_xlim(current_band['start']/1e6 - 1, current_band['stop']/1e6 + 1)
                 else:
                     # Fallback to data range
                     self.ax_progress.set_xlim(min(freqs) - 1, max(freqs) + 1)
-            
+
             if strengths:
                 self.ax_progress.set_ylim(min(strengths) - 5, max(strengths) + 5)
-        
+
         return list(self.band_lines.values())
     
     def update_signals(self, signals):
